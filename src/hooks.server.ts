@@ -1,8 +1,9 @@
 import { building } from '$app/environment';
 import { GlobalThisWSS } from '$lib/server/webSocket';
 import type { Handle } from '@sveltejs/kit';
-import type { ExtendedGlobal } from '$lib/server/webSocket';
-import sqlite3 from "sqlite3";
+import { GlobalThisConn, initSavedOBSConfig } from '$lib/server/obsConnections';
+import type { ExtendedGlobal } from './app';
+import { GlobalThisDB, initDB } from '$lib/server/db';
 
 // This can be extracted into a separate file
 let wssInitialized = false;
@@ -16,48 +17,43 @@ const startupWebsocketServer = () => {
       // const session = await getSessionFromCookie(request.headers.cookie || '');
       // if (!session) ws.close(1008, 'User not authenticated');
       // ws.userId = session.userId;
-      console.log(`[wss:kit] client connected (${ws.socketId})`);
-      ws.send(`Hello from SvelteKit ${new Date().toLocaleString()} (${ws.socketId})]`);
+      console.debug(`[wss:kit] client connected (${ws.socketId})`);
 
       ws.on('close', () => {
-        console.log(`[wss:kit] client disconnected (${ws.socketId})`);
+        console.debug(`[wss:kit] client disconnected (${ws.socketId})`);
       });
     });
     wssInitialized = true;
   }
 };
 
+
 export const handle = (async ({ event, resolve }) => {
-  startupWebsocketServer();
+  startupWebsocketServer()
+  initDB()
+  initSavedOBSConfig()
+
+  if (!event.locals.db) {
+    const db = (globalThis as ExtendedGlobal)[GlobalThisDB];
+    if (db !== undefined) {
+      event.locals.db = db
+    }
+  }
+
   // Skip WebSocket server when pre-rendering pages
   if (!building) {
-    if (!event.locals.db) {
-      // This will create the database within the `db.sqlite` file.
-      const db = new sqlite3.Database('db.sqlite', (err) => {
-        if(err) {
-          throw err;
-        }
-      });
-      
-      // Set the db as our events.db variable.
-      event.locals.db = db
-      
-      // We can create a basic table in the db
-      const query = "CREATE TABLE IF NOT EXISTS obs (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, ip TEXT, port INT, password TEXT)"
-      db.run(query, (err) => {
-        if(err) {
-          throw err
-        }
-      })
-    }
-
     const wss = (globalThis as ExtendedGlobal)[GlobalThisWSS];
     if (wss !== undefined) {
       event.locals.wss = wss;
     }
+
+    const connections = (globalThis as ExtendedGlobal)[GlobalThisConn];
+    if (connections !== undefined) {
+      event.locals.connections = connections;
+    }
   }
   const response = await resolve(event, {
-		filterSerializedResponseHeaders: name => name === 'content-type',
-	});
+    filterSerializedResponseHeaders: name => name === 'content-type',
+  });
   return response;
 }) satisfies Handle;
