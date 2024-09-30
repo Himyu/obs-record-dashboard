@@ -8,7 +8,7 @@
 	export let data;
 	let OBSConfig = data.OBSConfig;
 
-	let recordingDisabled = false
+	let recordingDisabled = false;
 
 	const establishWebSocket = () => {
 		if (webSocketEstablished) return;
@@ -26,7 +26,7 @@
 		ws.addEventListener('message', (event) => {
 			console.log('[websocket] message received', event);
 			const data = JSON.parse(event.data);
-			console.log(data)
+			console.log(data);
 
 			if (data.meta.namespace === 'obs' && data.meta.type === 'connection') {
 				const connection = OBSConfig.findIndex((c) => c.id === data.id);
@@ -49,11 +49,19 @@
 </script>
 
 <main class="dark:bg-gray-900 dark:text-white w-full min-h-[100vh] px-10 py-5">
-	<h1
-		class="inline-block text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight dark:text-slate-200 mb-5"
-	>
-		OBS Overwatch
-	</h1>
+	<div class="flex">
+		<h1
+			class="inline-block text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight dark:text-slate-200 mb-5"
+		>
+			OBS Overwatch
+		</h1>
+		<form method="POST" action="?/startAll" class="ml-auto">
+			<button class="btn bg-red-700 rounded py-2 px-4 mb-5">Start All</button>
+		</form>
+		<form method="POST" action="?/stopAll" class="ml-5">
+			<button class="btn bg-red-700 rounded py-2 px-4 mb-5">Stop All</button>
+		</form>
+	</div>
 	<table class="border-collapse table-auto w-full text-sm mb-5">
 		<thead>
 			<tr>

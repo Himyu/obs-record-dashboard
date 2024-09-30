@@ -1,4 +1,4 @@
-import { connect, reconnect, recording } from '$lib/server/obsConnections';
+import { all, connect, reconnect, recording } from '$lib/server/obsConnections';
 import type OBSWebSocket from 'obs-websocket-js';
 import type { PageServerLoad, Actions } from './$types';
 
@@ -78,5 +78,11 @@ export const actions = {
     const id = Number(data.get('id')!.toString())
 
     await recording(id, 'StopRecord')
+  },
+  startAll: async () => {
+    all('StartRecord')
+  },
+  stopAll: async () => {
+    all('StopRecord')
   }
 } satisfies Actions;

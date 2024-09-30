@@ -164,4 +164,25 @@ export const recording = async (id: number, action: 'StartRecord' | 'StopRecord'
   }
 }
 
+export const all = async (action: 'StartRecord' | 'StopRecord') => {
+  const db = (globalThis as ExtendedGlobal)[GlobalThisDB];
 
+  if (db === undefined) return
+
+  let data
+
+  try {
+    const query = db.prepare("SELECT * FROM obs");
+    data = query.all() as OBSConfig[]
+  } catch (error) {
+    console.error(error)
+    return
+  }
+
+  await Promise.all(data.map(async (c) => {
+    if (c.recordingActive === true && action === 'StartRecord') return
+    if (c.recordingActive === false && action === 'StopRecord') return
+    
+    return recording(c.id, action)
+  }))
+}
