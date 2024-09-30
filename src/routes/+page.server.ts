@@ -1,4 +1,4 @@
-import { connect, reconnect } from '$lib/server/obsConnections';
+import { connect, reconnect, recording } from '$lib/server/obsConnections';
 import type OBSWebSocket from 'obs-websocket-js';
 import type { PageServerLoad, Actions } from './$types';
 
@@ -8,8 +8,9 @@ export interface OBSConfig {
   ip: string
   port: number
   password?: string
-  online: boolean
-  recording: boolean
+  online?: boolean
+  recordingActive?: boolean
+  recordingState?: string
 }
 
 export const load = (async ({ locals }) => {
@@ -38,9 +39,7 @@ export const actions = {
       name: data.get('name') as string,
       ip: data.get('ip') as string,
       port: Number(data.get('port')?.toString()),
-      password: data.get('password')?.toString() ?? undefined,
-      online: false,
-      recording: false
+      password: data.get('password')?.toString() ?? undefined
     })
   },
   delete: async ({ request, locals }) => {
@@ -65,5 +64,19 @@ export const actions = {
     const id = Number(data.get('id')!.toString())
 
     await reconnect(id)
+  },
+  startRecord: async ({ request }) => {
+    const data = await request.formData()
+    if (!data.has('id')) return
+    const id = Number(data.get('id')!.toString())
+
+    await recording(id, 'StartRecord')
+  },
+  stopRecord: async ({ request }) => {
+    const data = await request.formData()
+    if (!data.has('id')) return
+    const id = Number(data.get('id')!.toString())
+
+    await recording(id, 'StopRecord')
   }
 } satisfies Actions;

@@ -1,8 +1,8 @@
 import type { OBSConfig } from "../../routes/+page.server";
 import { EventSubscription, OBSWebSocket } from 'obs-websocket-js';
-import { GlobalThisWSS } from "./webSocket";
 import { GlobalThisDB } from "./db";
 import type { ExtendedGlobal } from "../../app";
+import { sendMessage } from "./sendMessage";
 
 export const GlobalThisConn = Symbol.for('sveltekit.obs-connections');
 export const connections: Map<number, OBSWebSocket> = new Map()
@@ -33,9 +33,8 @@ export const initSavedOBSConfig = async () => {
 
 export const reconnect = async (id: number) => {
   const db = (globalThis as ExtendedGlobal)[GlobalThisDB];
-  const wss = (globalThis as ExtendedGlobal)[GlobalThisWSS];
 
-  if (db === undefined || wss === undefined) return
+  if (db === undefined) return
 
   let data
 
@@ -56,15 +55,9 @@ export const reconnect = async (id: number) => {
       eventSubscriptions: EventSubscription.All
     })
 
-    wss.clients.forEach(c => {
-      c.send(JSON.stringify({
-        meta: {
-          namespace: 'obs',
-          type: 'connection'
-        },
-        id: id,
-        connected: true
-      }))
+    sendMessage('obs', 'connection', {
+      id: id,
+      connected: true
     })
 
     const query = db.prepare('UPDATE obs SET online = true WHERE id = ?');
@@ -73,18 +66,12 @@ export const reconnect = async (id: number) => {
     return true
   } catch (error) {
     console.error(error)
-    wss.clients.forEach(c => {
-      c.send(JSON.stringify({
-        meta: {
-          namespace: 'obs',
-          type: 'connection'
-        },
-        id: id,
-        connected: false
-      }))
+    sendMessage('obs', 'connection', {
+      id: id,
+      connected: false
     })
 
-    const query = db.prepare('UPDATE obs SET online = false, recording = false WHERE id = ?');
+    const query = db.prepare('UPDATE obs SET online = false, recordingActive = false WHERE id = ?');
     query.run(id)
 
     return false
@@ -92,10 +79,9 @@ export const reconnect = async (id: number) => {
 }
 
 export const connect = async (obs: OBSConfig) => {
-  const wss = (globalThis as ExtendedGlobal)[GlobalThisWSS];
   const db = (globalThis as ExtendedGlobal)[GlobalThisDB];
 
-  if (db === undefined || wss === undefined) return
+  if (db === undefined) return
 
   const connection = new OBSWebSocket()
   connections.set(obs.id, connection)
@@ -106,87 +92,76 @@ export const connect = async (obs: OBSConfig) => {
       eventSubscriptions: EventSubscription.All
     })
 
-    wss.clients.forEach(c => {
-      c.send(JSON.stringify({
-        meta: {
-          namespace: 'obs',
-          type: 'connection'
-        },
-        id: obs.id,
-        connected: true
-      }))
+    sendMessage('obs', 'connection', {
+      id: obs.id,
+      connected: true
     })
 
     const query = db.prepare('UPDATE obs SET online = true WHERE id = ?');
     query.run(obs.id)
   } catch (error) {
     console.error(error)
-    wss.clients.forEach(c => {
-      c.send(JSON.stringify({
-        meta: {
-          namespace: 'obs',
-          type: 'connection'
-        },
-        id: obs.id,
-        connected: false
-      }))
+    sendMessage('obs', 'connection', {
+      id: obs.id,
+      connected: false
     })
 
-    const query = db.prepare('UPDATE obs SET online = false, recording = false WHERE id = ?');
+    const query = db.prepare('UPDATE obs SET online = false, recordingActive = false WHERE id = ?');
     query.run(obs.id)
 
     return false
   }
 
-  connection.on('ConnectionClosed', () => {
-    wss.clients.forEach(c => {
-      c.send(JSON.stringify({
-        meta: {
-          namespace: 'obs',
-          type: 'connection'
-        },
-        id: obs.id,
-        connected: false
-      }))
+  connection.on('ConnectionClosed', async () => {
+    sendMessage('obs', 'connection', {
+      id: obs.id,
+      connected: false
     })
 
-    const query = db.prepare('UPDATE obs SET online = false, recording = false WHERE id = ?');
+    const query = db.prepare('UPDATE obs SET online = false, recordingActive = false WHERE id = ?');
     query.run(obs.id)
   })
-  connection.on('ConnectionError', (err) => {
+  connection.on('ConnectionError', async (err) => {
     console.error(err)
 
-    wss.clients.forEach(c => {
-      c.send(JSON.stringify({
-        meta: {
-          namespace: 'obs',
-          type: 'connection'
-        },
-        id: obs.id,
-        connected: false
-      }))
+    sendMessage('obs', 'connection', {
+      id: obs.id,
+      connected: false
     })
 
-    const query = db.prepare('UPDATE obs SET online = false, recording = false WHERE id = ?');
+    const query = db.prepare('UPDATE obs SET online = false, recordingActive = false WHERE id = ?');
     query.run(obs.id)
   })
 
-  connection.on('RecordStateChanged', (rs) => {
-    wss.clients.forEach(c => {
-      c.send(JSON.stringify({
-        meta: {
-          namespace: 'obs',
-          type: 'recording'
-        },
-        id: obs.id,
-        state: rs.outputActive
-      }))
-    })
+  connection.on('RecordStateChanged', async (rs) => {
+    if (rs.outputState.endsWith('ING')) return
 
-    const query = db.prepare('UPDATE obs SET recording = ? WHERE id = ?');
-    query.run(rs.outputState, obs.id)
+    const query = db.prepare('UPDATE obs SET recordingActive = ?, recordingState = ? WHERE id = ?');
+    query.run(rs.outputActive ? 1 : 0, rs.outputState, obs.id)
+    
+    setTimeout(() => {
+      sendMessage('obs', 'recording', {
+        id: obs.id,
+        recordingActive: rs.outputActive,
+        recordingState: rs.outputState
+      })
+    }, 1000)
   })
 
   return true
 }
+
+export const recording = async (id: number, action: 'StartRecord' | 'StopRecord') => {
+  const connection = connections.get(id)
+  if (connection === undefined) return
+
+  try {
+    await connection.call(action)
+    return true
+  } catch (error) {
+    console.error(error)
+    return false
+  }
+}
+
 

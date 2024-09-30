@@ -10,7 +10,7 @@ export const initDB = async () => {
     const db = new Database('db.sqlite');
   
     // We can create a basic table in the db
-    const query = "CREATE TABLE IF NOT EXISTS obs (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, ip TEXT, port INT, password TEXT, online BOOLEAN DEFAULT false, recording BOOLEAN DEFAULT false)"
+    const query = "CREATE TABLE IF NOT EXISTS obs (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, ip TEXT, port INT, password TEXT, online BOOLEAN DEFAULT false, recordingActive BOOLEAN DEFAULT false, recordingState TEXT)"
     db.exec(query);
   
     (globalThis as ExtendedGlobal)[GlobalThisDB] = db;

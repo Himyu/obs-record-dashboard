@@ -8,6 +8,8 @@
 	export let data;
 	let OBSConfig = data.OBSConfig;
 
+	let recordingDisabled = false
+
 	const establishWebSocket = () => {
 		if (webSocketEstablished) return;
 
@@ -24,6 +26,7 @@
 		ws.addEventListener('message', (event) => {
 			console.log('[websocket] message received', event);
 			const data = JSON.parse(event.data);
+			console.log(data)
 
 			if (data.meta.namespace === 'obs' && data.meta.type === 'connection') {
 				const connection = OBSConfig.findIndex((c) => c.id === data.id);
@@ -34,7 +37,8 @@
 				const connection = OBSConfig.findIndex((c) => c.id === data.id);
 				if (connection <= -1) return;
 
-				OBSConfig[connection].recording = data.state;
+				OBSConfig[connection].recordingActive = data.recordingActive;
+				OBSConfig[connection].recordingState = data.recordingState;
 			}
 		});
 	};
@@ -107,10 +111,34 @@
 							: 'bg-red-400'} bg-opacity-50">{obs.online ? 'ONLINE' : 'OFFLINE'}</td
 					>
 					<td
-						class="border-b border-slate-100 dark:border-slate-700 p-4 py-2 pl-8 text-slate-100 dark:text-slate-100 {obs.recording
+						class="border-b border-slate-100 dark:border-slate-700 p-4 py-2 pl-8 text-slate-100 dark:text-slate-100 {obs.recordingActive
 							? 'bg-red-400'
-							: ''} bg-opacity-50">{obs.recording ? 'RECORDING' : ''}</td
+							: ''} bg-opacity-50"
 					>
+						<div class="flex items-center gap-5">
+							{obs.recordingState ? obs.recordingState.split('_').pop() : ''}
+							{#if !obs.recordingActive}
+								<form method="POST" action="?/startRecord">
+									<button
+										type="submit"
+										name="id"
+										value={obs.id}
+										disabled={recordingDisabled}
+										class="btn bg-red-700 text-2xl rounded pb-1 px-4">●</button
+									>
+								</form>
+							{:else}
+								<form method="POST" action="?/stopRecord">
+									<button
+										type="submit"
+										name="id"
+										value={obs.id}
+										class="btn bg-red-700 rounded py-2 px-4">■</button
+									>
+								</form>
+							{/if}
+						</div>
+					</td>
 					<td
 						class="border-b border-slate-100 dark:border-slate-700 p-4 py-2 pl-8 text-slate-100 dark:text-slate-100 flex gap-5"
 					>
